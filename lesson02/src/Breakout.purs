@@ -1,7 +1,8 @@
 module Breakout (component) where
 
 import Prelude
-import CSS (margin, padding, px)
+import CSS (background, block, display, margin, marginBottom, marginLeft, marginRight, marginTop, padding, px, rgb)
+import CSS.Common (auto)
 import Control.Monad.Rec.Class (forever)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Time.Duration (Milliseconds(..))
@@ -61,7 +62,14 @@ render _ =
         padding (px 0.0) (px 0.0) (px 0.0) (px 0.0)
     ]
     [ HH.canvas
-        [ HP.id canvasId
+        [ style do
+            background (rgb 238 238 238)
+            display block
+            marginTop (px 0.0)
+            marginRight auto
+            marginBottom (px 0.0)
+            marginLeft auto
+        , HP.id canvasId
         , HP.width 480
         , HP.height 320
         ]
