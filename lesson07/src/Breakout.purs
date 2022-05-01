@@ -7,7 +7,7 @@ import Control.Monad.Rec.Class (forever)
 import Control.Monad.ST (for)
 import Control.Monad.ST as ST
 import Control.Monad.ST.Ref as STRef
-import Data.Foldable (findMap)
+import Data.Array as Array
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.Map (Map)
@@ -334,9 +334,15 @@ nextDataset dataset c =
 
     collisionedBrick = collisionDetection { x: x, y: y } dataset.bricks
 
-    Tuple nextBricks collisioned = case collisionedBrick of
-      Nothing -> Tuple dataset.bricks false
-      Just (Tuple key value) -> Tuple (Map.insert key value dataset.bricks) true
+    { nextBricks: nextBricks, collisioned: collisioned } = case collisionedBrick of
+      Nothing ->
+        { nextBricks: dataset.bricks
+        , collisioned: false
+        }
+      Just (Tuple key value) ->
+        { nextBricks: Map.insert key value dataset.bricks
+        , collisioned: true
+        }
 
     { nextDy: nextDy, gameover: gameover } =
       let
@@ -372,20 +378,25 @@ nextDataset dataset c =
   where
   collisionDetection :: { x :: Number, y :: Number } -> Bricks -> Maybe (Tuple BricksIndex Brick)
   collisionDetection ball bricks =
-    let
-      (xs :: Array (Tuple BricksIndex Brick)) = Map.toUnfoldableUnordered bricks
-    in
-      findMap collisioned xs
+    Array.head
+      $ map inactivate
+      $ Map.toUnfoldableUnordered
+      $ Map.filterWithKey collisioned bricks
     where
-    collisioned :: Tuple BricksIndex Brick -> Maybe (Tuple BricksIndex Brick)
-    collisioned (Tuple index (Brick brick)) = case brick.status of
-      InActive -> Nothing
+    inactivate :: Tuple BricksIndex Brick -> Tuple BricksIndex Brick
+    inactivate (Tuple idx (Brick brick)) =
+      Tuple
+        idx
+        $ Brick
+            brick { status = InActive }
+
+    collisioned :: BricksIndex -> Brick -> Boolean
+    collisioned _ (Brick brick) = case brick.status of
+      InActive -> false
       Active
         | between brick.x (brick.x + (Int.toNumber brickWidth)) ball.x
-            && between brick.y (brick.y + (Int.toNumber brickHeight)) ball.y ->
-          Just
-            $ Tuple index (Brick brick { status = InActive })
-        | otherwise -> Nothing
+            && between brick.y (brick.y + (Int.toNumber brickHeight)) ball.y -> true
+        | otherwise -> false
 
 timer :: forall m a. MonadAff m => a -> m (HS.Emitter a)
 timer val = do
