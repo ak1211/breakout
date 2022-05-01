@@ -265,11 +265,11 @@ draw canvas dataset = do
       ctx <- Canvas.getContext2D canvas
       Canvas.beginPath ctx
       Canvas.rect ctx
-        $ { x: brick.x
-          , y: brick.y
-          , width: Int.toNumber brickWidth
-          , height: Int.toNumber brickHeight
-          }
+        { x: brick.x
+        , y: brick.y
+        , width: Int.toNumber brickWidth
+        , height: Int.toNumber brickHeight
+        }
       Canvas.setFillStyle ctx "#0095DD"
       Canvas.fill ctx
       Canvas.closePath ctx
