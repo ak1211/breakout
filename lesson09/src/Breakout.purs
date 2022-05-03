@@ -1,0 +1,477 @@
+module Breakout (component) where
+
+import Prelude
+import CSS (background, block, display, margin, marginBottom, marginLeft, marginRight, marginTop, padding, px, rgb)
+import CSS.Common (auto)
+import Control.Monad.Rec.Class (forever)
+import Control.Monad.ST (for)
+import Control.Monad.ST as ST
+import Control.Monad.ST.Ref as STRef
+import Data.Array as Array
+import Data.Generic.Rep (class Generic)
+import Data.Int as Int
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.Show.Generic (genericShow)
+import Data.Time.Duration (Milliseconds(..))
+import Data.Traversable (for_)
+import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff as Aff
+import Effect.Aff.Class (class MonadAff)
+import Graphics.Canvas (CanvasElement, Dimensions)
+import Graphics.Canvas as Canvas
+import Halogen (SubscriptionId)
+import Halogen as H
+import Halogen.HTML as HH
+import Halogen.HTML.CSS (style)
+import Halogen.HTML.Properties as HP
+import Halogen.Query.Event (eventListener)
+import Halogen.Subscription as HS
+import Math as Math
+import Web.DOM.NonElementParentNode as NonElementParentNode
+import Web.Event.Event as E
+import Web.HTML (HTMLElement, window)
+import Web.HTML.HTMLDocument as HTMLDocument
+import Web.HTML.HTMLElement as HTMLElement
+import Web.HTML.Location as Location
+import Web.HTML.Window as Window
+import Web.UIEvent.KeyboardEvent as KE
+import Web.UIEvent.KeyboardEvent.EventTypes as KET
+import Web.UIEvent.MouseEvent (MouseEvent)
+import Web.UIEvent.MouseEvent as ME
+import Web.UIEvent.MouseEvent.EventTypes as MET
+
+canvasId :: String
+canvasId = "myCanvas"
+
+paddleHeight = 10.0 :: Number
+
+paddleWidth = 75.0 :: Number
+
+ballRadius = 10.0 :: Number
+
+brickRowCount = 3 :: Int
+
+brickColumnCount = 5 :: Int
+
+brickWidth = 75 :: Int
+
+brickHeight = 20 :: Int
+
+brickPadding = 10 :: Int
+
+brickOffsetTop = 30 :: Int
+
+brickOffsetLeft = 30 :: Int
+
+data BrickStatus
+  = InActive
+  | Active
+
+derive instance genericBrickStatus :: Generic BrickStatus _
+
+derive instance eqBrickStatus :: Eq BrickStatus
+
+instance showBrickStatus :: Show BrickStatus where
+  show = genericShow
+
+newtype BricksIndex
+  = BricksIndex { row :: Int, column :: Int }
+
+derive newtype instance showBricksIndex :: Show BricksIndex
+
+derive newtype instance ordBricksIndex :: Ord BricksIndex
+
+derive newtype instance eqBricksIndex :: Eq BricksIndex
+
+newtype Brick
+  = Brick { x :: Number, y :: Number, status :: BrickStatus }
+
+derive newtype instance showBrick :: Show Brick
+
+type Bricks
+  = Map BricksIndex Brick
+
+type Dataset
+  = { x :: Number
+    , y :: Number
+    , dx :: Number
+    , dy :: Number
+    , paddleX :: Number
+    , leftPressed :: Boolean
+    , rightPressed :: Boolean
+    , bricks :: Bricks
+    , score :: Int
+    }
+
+data GameSet
+  = OnGame
+  | GameOver
+  | GameClear
+
+type State
+  = { maybeCanvas :: Maybe CanvasElement
+    , maybeTimer :: Maybe SubscriptionId
+    , dataset :: Dataset
+    }
+
+data Action
+  = Initialize
+  | HandleMouseMove MouseEvent
+  | Tick
+  | HandleKeyDown KE.KeyboardEvent
+  | HandleKeyUp KE.KeyboardEvent
+
+component :: forall query input output m. MonadAff m => H.Component query input output m
+component =
+  H.mkComponent
+    { initialState
+    , render
+    , eval:
+        H.mkEval
+          $ H.defaultEval
+              { handleAction = handleAction
+              , initialize = Just Initialize
+              }
+    }
+
+initialState :: forall i. i -> State
+initialState _ =
+  { maybeCanvas: Nothing
+  , maybeTimer: Nothing
+  , dataset:
+      { x: 0.0
+      , y: 0.0
+      , dx: 0.0
+      , dy: 0.0
+      , paddleX: 0.0
+      , leftPressed: false
+      , rightPressed: false
+      , bricks: Map.empty
+      , score: 0
+      }
+  }
+
+render :: forall m. State -> H.ComponentHTML Action () m
+render state =
+  HH.main
+    [ style do
+        margin (px 0.0) (px 0.0) (px 0.0) (px 0.0)
+        padding (px 0.0) (px 0.0) (px 0.0) (px 0.0)
+    ]
+    [ HH.canvas
+        [ style do
+            background (rgb 238 238 238)
+            display block
+            marginTop (px 0.0)
+            marginRight auto
+            marginBottom (px 0.0)
+            marginLeft auto
+        , HP.id canvasId
+        , HP.width 480
+        , HP.height 320
+        ]
+    , HH.text $ show state.dataset
+    ]
+
+handleAction :: forall output m. MonadAff m => Action -> H.HalogenM State Action () output m Unit
+handleAction = case _ of
+  Initialize -> do
+    -- keyboard event
+    document <- H.liftEffect $ Window.document =<< window
+    H.subscribe' \_ ->
+      eventListener
+        KET.keydown
+        (HTMLDocument.toEventTarget document)
+        (map HandleKeyDown <<< KE.fromEvent)
+    H.subscribe' \_ ->
+      eventListener
+        KET.keyup
+        (HTMLDocument.toEventTarget document)
+        (map HandleKeyUp <<< KE.fromEvent)
+    -- mouse event
+    H.subscribe' \_ ->
+      eventListener
+        MET.mousemove
+        (HTMLDocument.toEventTarget document)
+        (map HandleMouseMove <<< ME.fromEvent)
+    -- timer
+    sid <- H.subscribe =<< timer Tick
+    --
+    init <- H.liftEffect initialize
+    H.put init { maybeTimer = Just sid }
+  Tick -> do
+    (state :: State) <- H.get
+    case { a: state.maybeCanvas, b: state.maybeTimer } of
+      { a: Just canvas, b: Just timerSubscriptionId } -> do
+        ret <- H.liftEffect $ draw canvas state.dataset
+        case ret.gameset of
+          GameOver -> do
+            H.liftEffect $ Window.alert "GAME OVER" =<< window
+            H.unsubscribe timerSubscriptionId
+            H.liftEffect $ Location.reload =<< Window.location =<< window
+          GameClear -> do
+            H.liftEffect $ Window.alert "YOU WIN, CONGRATULATIONS!" =<< window
+            H.unsubscribe timerSubscriptionId
+            H.liftEffect $ Location.reload =<< Window.location =<< window
+          OnGame -> H.modify_ \st -> st { dataset = ret.nextDataset }
+      _ -> pure unit
+  HandleKeyDown ev
+    | KE.key ev == "Right" || KE.key ev == "ArrowRight" -> do
+      H.liftEffect $ E.preventDefault (KE.toEvent ev)
+      H.modify_ \st -> st { dataset { rightPressed = true } }
+    | KE.key ev == "Left" || KE.key ev == "ArrowLeft" -> do
+      H.liftEffect $ E.preventDefault (KE.toEvent ev)
+      H.modify_ \st -> st { dataset { leftPressed = true } }
+    | otherwise -> pure unit
+  HandleKeyUp ev
+    | KE.key ev == "Right" || KE.key ev == "ArrowRight" -> do
+      H.liftEffect $ E.preventDefault (KE.toEvent ev)
+      H.modify_ \st -> st { dataset { rightPressed = false } }
+    | KE.key ev == "Left" || KE.key ev == "ArrowLeft" -> do
+      H.liftEffect $ E.preventDefault (KE.toEvent ev)
+      H.modify_ \st -> st { dataset { leftPressed = false } }
+    | otherwise -> pure unit
+  HandleMouseMove ev -> do
+    (state :: State) <- H.get
+    maybeCanvasElement <- H.liftEffect $ htmlElementById canvasId
+    case Tuple state.maybeCanvas maybeCanvasElement of
+      Tuple (Just canvas) (Just canvasElement) -> do
+        { width: canvasWidth, height: _ } <- H.liftEffect $ Canvas.getCanvasDimensions canvas
+        offsetLeft <- H.liftEffect $ HTMLElement.offsetLeft canvasElement
+        let
+          relativeX = Int.toNumber (ME.clientX ev) - offsetLeft
+        if between 0.0 canvasWidth relativeX then
+          H.modify_ \st -> st { dataset { paddleX = relativeX - paddleWidth / 2.0 } }
+        else
+          pure unit
+      _ -> pure unit
+  where
+  initialize :: Effect State
+  initialize =
+    Canvas.getCanvasElementById canvasId
+      >>= case _ of
+          Nothing -> pure $ initialState unit
+          Just canvas -> do
+            dim <- Canvas.getCanvasDimensions canvas
+            pure
+              { maybeCanvas: Just canvas
+              , maybeTimer: Nothing
+              , dataset:
+                  { x: dim.width / 2.0
+                  , y: dim.height - 30.0
+                  , dx: 2.0
+                  , dy: (-2.0)
+                  , paddleX: (dim.width - paddleWidth) / 2.0
+                  , leftPressed: false
+                  , rightPressed: false
+                  , bricks: Map.empty
+                  , score: 0
+                  }
+              }
+
+  htmlElementById :: String -> Effect (Maybe HTMLElement)
+  htmlElementById elementId = do
+    document <- Window.document =<< window
+    let
+      nonElementParentNode = HTMLDocument.toNonElementParentNode document
+    element <- NonElementParentNode.getElementById elementId nonElementParentNode
+    pure $ HTMLElement.fromElement =<< element
+
+draw :: CanvasElement -> Dataset -> Effect { nextDataset :: Dataset, gameset :: GameSet }
+draw canvas dataset = do
+  dim <- H.liftEffect $ Canvas.getCanvasDimensions canvas
+  ctx <- Canvas.getContext2D canvas
+  --
+  Canvas.clearRect ctx { x: 0.0, y: 0.0, width: dim.width, height: dim.height }
+  drawBall
+  drawPaddle dim
+  drawScore dataset.score
+  bricks <- pure $ coordinateBricks dataset.bricks
+  drawBricks bricks
+  pure $ nextDataset dataset { bricks = bricks } dim
+  where
+  drawBall :: Effect Unit
+  drawBall = do
+    ctx <- Canvas.getContext2D canvas
+    --
+    Canvas.beginPath ctx
+    Canvas.arc ctx
+      { x: dataset.x
+      , y: dataset.y
+      , radius: ballRadius
+      , start: 0.0
+      , end: Math.pi * 2.0
+      }
+    Canvas.setFillStyle ctx "#0095DD"
+    Canvas.fill ctx
+    Canvas.closePath ctx
+
+  drawPaddle :: Dimensions -> Effect Unit
+  drawPaddle { height: height } = do
+    ctx <- Canvas.getContext2D canvas
+    --
+    Canvas.beginPath ctx
+    Canvas.rect ctx
+      { x: dataset.paddleX
+      , y: height - paddleHeight
+      , width: paddleWidth
+      , height: paddleHeight
+      }
+    Canvas.setFillStyle ctx "#0095DD"
+    Canvas.fill ctx
+    Canvas.closePath ctx
+
+  drawBricks :: Bricks -> Effect Unit
+  drawBricks bricks =
+    for_ bricks case _ of
+      (Brick brick)
+        | brick.status == Active -> do
+          ctx <- Canvas.getContext2D canvas
+          Canvas.beginPath ctx
+          Canvas.rect ctx
+            { x: brick.x
+            , y: brick.y
+            , width: Int.toNumber brickWidth
+            , height: Int.toNumber brickHeight
+            }
+          Canvas.setFillStyle ctx "#0095DD"
+          Canvas.fill ctx
+          Canvas.closePath ctx
+      _ -> pure unit
+
+  coordinateBricks :: Bricks -> Bricks
+  coordinateBricks bricks =
+    ST.run do
+      var <- STRef.new bricks
+      for 0 brickColumnCount \c ->
+        for 0 brickRowCount \r ->
+          let
+            key = BricksIndex { row: r, column: c }
+
+            value = coord Active key
+          in
+            STRef.modify (Map.insertWith modify key value) var
+      STRef.read var
+    where
+    modify :: Brick -> Brick -> Brick
+    modify (Brick current) (Brick new) = Brick new { status = current.status }
+
+    coord :: BrickStatus -> BricksIndex -> Brick
+    coord status (BricksIndex { row: r, column: c }) =
+      Brick
+        { x: (c * (brickWidth + brickPadding)) + brickOffsetLeft # Int.toNumber
+        , y: (r * (brickHeight + brickPadding)) + brickOffsetTop # Int.toNumber
+        , status: status
+        }
+
+  drawScore :: Int -> Effect Unit
+  drawScore score = do
+    ctx <- Canvas.getContext2D canvas
+    Canvas.setFont ctx "16px Arial"
+    Canvas.setFillStyle ctx "#0095DD"
+    Canvas.fillText ctx ("Score: " <> Int.toStringAs Int.decimal score) 8.0 20.0
+
+nextDataset :: Dataset -> Dimensions -> { nextDataset :: Dataset, gameset :: GameSet }
+nextDataset dataset@{ x: x, y: y, dx: dx, dy: dy } c =
+  let
+    { nextBricks: nextBricks, collisioned: collisioned } = nextBricksAndCollisioned
+
+    { nextDy: nextDy, gameset: gameset } = nextDyAndGameset collisioned
+
+    nextScore = if collisioned then dataset.score + 1 else dataset.score
+
+    nextGameSet = case gameset of
+      OnGame
+        | nextScore == brickRowCount * brickColumnCount -> GameClear
+      _ -> gameset
+  in
+    { nextDataset:
+        dataset
+          { x = x + dx
+          , y = y + dy
+          , dx = nextDx
+          , dy = nextDy
+          , paddleX = nextPaddleX
+          , bricks = nextBricks
+          , score = nextScore
+          }
+    , gameset: nextGameSet
+    }
+  where
+  nextPaddleX :: Number
+  nextPaddleX =
+    clamp 0.0 (c.width - paddleWidth)
+      $ case { left: dataset.leftPressed, right: dataset.rightPressed } of
+          { left: false, right: true } -> dataset.paddleX + 7.0
+          { left: true, right: false } -> dataset.paddleX - 7.0
+          _ -> dataset.paddleX
+
+  nextBricksAndCollisioned :: { nextBricks :: Bricks, collisioned :: Boolean }
+  nextBricksAndCollisioned = case collisionDetection { x: x, y: y } dataset.bricks of
+    Nothing ->
+      { nextBricks: dataset.bricks
+      , collisioned: false
+      }
+    Just (Tuple key value) ->
+      { nextBricks: Map.insert key value dataset.bricks
+      , collisioned: true
+      }
+
+  nextDx :: Number
+  nextDx =
+    if between ballRadius (c.width - ballRadius) (x + dx) then
+      dx
+    else
+      (-dx)
+
+  nextDyAndGameset :: Boolean -> { nextDy :: Number, gameset :: GameSet }
+  nextDyAndGameset collisioned =
+    let
+      touchTheCeiling = (y + dy) < ballRadius
+
+      touchTheFloor = (y + dy) > (c.height - ballRadius)
+
+      touchThePaddle = touchTheFloor && between dataset.paddleX (dataset.paddleX + paddleWidth) (x + dx)
+    in
+      case true of
+        _
+          | touchTheCeiling -> { nextDy: (-dy), gameset: OnGame }
+          | touchThePaddle -> { nextDy: (-dy), gameset: OnGame }
+          | touchTheFloor -> { nextDy: (-dy), gameset: GameOver }
+          | collisioned -> { nextDy: (-dy), gameset: OnGame }
+          | otherwise -> { nextDy: dy, gameset: OnGame }
+
+  collisionDetection :: { x :: Number, y :: Number } -> Bricks -> Maybe (Tuple BricksIndex Brick)
+  collisionDetection ball bricks =
+    Array.head
+      $ map inactivate
+      $ Map.toUnfoldableUnordered
+      $ Map.filterWithKey collisioned bricks
+    where
+    inactivate :: Tuple BricksIndex Brick -> Tuple BricksIndex Brick
+    inactivate (Tuple idx (Brick brick)) =
+      Tuple
+        idx
+        $ Brick
+            brick { status = InActive }
+
+    collisioned :: BricksIndex -> Brick -> Boolean
+    collisioned _ (Brick brick) = case brick.status of
+      InActive -> false
+      Active
+        | between brick.x (brick.x + (Int.toNumber brickWidth)) ball.x
+            && between brick.y (brick.y + (Int.toNumber brickHeight)) ball.y -> true
+        | otherwise -> false
+
+timer :: forall m a. MonadAff m => a -> m (HS.Emitter a)
+timer val = do
+  { emitter, listener } <- H.liftEffect HS.create
+  _ <-
+    H.liftAff $ Aff.forkAff
+      $ forever do
+          Aff.delay $ Milliseconds 10.0
+          H.liftEffect $ HS.notify listener val
+  pure emitter
