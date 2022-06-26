@@ -1,2 +1,8 @@
 /node_modules/
-/src-tauri/
+/src-tauri/*
+!/src-tauri/tauri.conf.json
+!/src-tauri/target/
+/src-tauri/target/*
+!/src-tauri/target/release/
+/src-tauri/target/release/*
+!/src-tauri/target/release/breakout-app.exe
