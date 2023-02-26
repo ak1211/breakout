@@ -4,6 +4,7 @@ import Prelude
 import CSS (background, block, display, margin, marginBottom, marginLeft, marginRight, marginTop, padding, px, rgb)
 import CSS.Common (auto)
 import Data.Maybe (Maybe(..))
+import Data.Number (pi)
 import Effect (Effect)
 import Effect.Aff.Class (class MonadAff)
 import Graphics.Canvas (CanvasElement)
@@ -12,7 +13,6 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS (style)
 import Halogen.HTML.Properties as HP
-import Math as Math
 
 canvasId :: String
 canvasId = "myCanvas"
@@ -90,7 +90,8 @@ draw canvas = do
       , y: 160.0
       , radius: 20.0
       , start: 0.0
-      , end: Math.pi * 2.0
+      , end: pi * 2.0
+      , useCounterClockwise: false
       }
   Canvas.setFillStyle ctx "green"
   Canvas.fill ctx

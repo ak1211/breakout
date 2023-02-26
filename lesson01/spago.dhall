@@ -19,10 +19,9 @@ to generate this file without the comments in this block.
   , "effect"
   , "halogen"
   , "halogen-css"
-  , "math"
   , "maybe"
+  , "numbers"
   , "prelude"
-  , "psci-support"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

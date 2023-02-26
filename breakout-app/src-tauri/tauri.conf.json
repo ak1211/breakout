@@ -29,7 +29,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "breakout game",
+      "identifier": "breakout-game",
       "longDescription": "",
       "macOS": {
         "entitlements": null,

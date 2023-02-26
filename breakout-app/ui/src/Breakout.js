@@ -1,9 +1,9 @@
 "use strict";
 
-exports.showModalDialogImpl = function (target) {
+export const showModalDialogImpl = function (target) {
 	$('#' + target).modal('show')
 };
 
-exports.hideModalDialogImpl = function (target) {
+export const hideModalDialogImpl = function (target) {
 	$('#' + target).modal('hide')
 };

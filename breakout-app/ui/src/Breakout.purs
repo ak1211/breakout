@@ -3,6 +3,7 @@ module Breakout
   ) where
 
 import Prelude
+
 import CSS (background, block, display, rgb)
 import Control.Monad.ST (for)
 import Control.Monad.ST as ST
@@ -14,6 +15,7 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Maybe as Maybe
+import Data.Number (pi)
 import Data.Show.Generic (genericShow)
 import Data.Traversable (traverse_)
 import Data.Tuple (Tuple(..))
@@ -32,8 +34,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.Subscription as HS
-import Halogen.Themes.Bootstrap4 as HB
-import Math as Math
+import Halogen.Themes.Bootstrap5 as HB
 import Web.DOM.NonElementParentNode as NonElementParentNode
 import Web.Event.Event as E
 import Web.HTML (HTMLElement)
@@ -269,11 +270,11 @@ render state =
 
   headingOne =
     HH.div
-      [ HP.classes [ HB.cardHeader, HB.p0 ]
+      [ HP.classes [ HB.cardHeader, HB.p0, HB.dGrid, HB.gap0 ]
       , HP.id "headingOne"
       ]
       [ HH.button
-          [ HP.classes [ HB.btn, HB.btnOutlineInfo, HB.btnBlock ]
+          [ HP.classes [ HB.btn, HB.btnOutlineInfo, HB.col12 ]
           , HP.type_ HP.ButtonButton
           , HP.attr (HC.AttrName "data-toggle") "collapse"
           , HP.attr (HC.AttrName "data-target") "#collapseOne"
@@ -311,7 +312,7 @@ modalDialog input =
             [ HH.div [ HP.class_ HB.modalHeader ]
                 [ HH.h5 [ HP.class_ HB.modalTitle ] [ HH.text input.title ]
                 , HH.button
-                    [ HP.class_ HB.close
+                    [ HP.class_ HB.btnClose
                     , HP.type_ HP.ButtonButton
                     , HP.attr (HC.AttrName "data-dismiss") "modal"
                     , HP.attr (HC.AttrName "area-label") "Close"
@@ -469,7 +470,8 @@ draw canvas dataset = do
       , y: dataset.y
       , radius: ballRadius
       , start: 0.0
-      , end: Math.pi * 2.0
+      , end: pi * 2.0
+      , useCounterClockwise: false
       }
     Canvas.setFillStyle ctx "#0095DD"
     Canvas.fill ctx

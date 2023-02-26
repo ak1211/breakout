@@ -5,6 +5,7 @@ import CSS (background, block, display, margin, marginBottom, marginLeft, margin
 import CSS.Common (auto)
 import Control.Monad.Rec.Class (forever)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Number (pi)
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff as Aff
@@ -16,7 +17,6 @@ import Halogen.HTML as HH
 import Halogen.HTML.CSS (style)
 import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
-import Math as Math
 
 canvasId :: String
 canvasId = "myCanvas"
@@ -114,7 +114,8 @@ drawBall canvas ds = do
     , y: ds.y
     , radius: 10.0
     , start: 0.0
-    , end: Math.pi * 2.0
+    , end: pi * 2.0
+    , useCounterClockwise: false
     }
   Canvas.setFillStyle ctx "#0095DD"
   Canvas.fill ctx

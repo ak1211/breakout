@@ -11,6 +11,7 @@ import Data.Int as Int
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
+import Data.Number (pi)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for_)
 import Effect (Effect)
@@ -25,7 +26,6 @@ import Halogen.HTML.CSS (style)
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
 import Halogen.Subscription as HS
-import Math as Math
 import Web.Event.Event as E
 import Web.HTML (window)
 import Web.HTML.HTMLDocument as HTMLDocument
@@ -238,7 +238,8 @@ draw canvas dataset = do
       , y: dataset.y
       , radius: ballRadius
       , start: 0.0
-      , end: Math.pi * 2.0
+      , end: pi * 2.0
+      , useCounterClockwise: false
       }
     Canvas.setFillStyle ctx "#0095DD"
     Canvas.fill ctx
