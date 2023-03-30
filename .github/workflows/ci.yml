@@ -24,4 +24,4 @@ jobs:
             .spago
             output
 
-      - run: num run build
+      - run: npm run build
