@@ -1,0 +1,9 @@
+{
+  "name": "breakout",
+  "version": "1.0.0",
+  "description": "breakout-game",
+  "scripts": {
+    "build:sub": "DIR=${npm_config_arg} && echo ${DIR} && cd ${DIR} && spago bundle-app",
+    "build": "ls -d lesson* | xargs -I {} npm run build:sub -arg={}"
+  }
+}
