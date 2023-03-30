@@ -24,4 +24,5 @@ jobs:
             .spago
             output
 
+      - run: npm i
       - run: npm run build
